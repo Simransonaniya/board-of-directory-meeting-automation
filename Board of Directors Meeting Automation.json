@@ -1,0 +1,772 @@
+{
+  "name": "Board of Directors Meeting Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Schedule a Board of Directors Meeting",
+        "formDescription": "Fill in the meeting details. An AI-drafted formal notice and agenda will be sent to the Chairperson for approval before going out to the directors.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Company Name",
+              "fieldName": "company_name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Meeting Title",
+              "fieldName": "meeting_title",
+              "placeholder": "e.g. Q3 Board Meeting",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Meeting Type",
+              "fieldType": "dropdown",
+              "fieldName": "meeting_type",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Regular Board Meeting"
+                  },
+                  {
+                    "option": "Special / Emergency Board Meeting"
+                  },
+                  {
+                    "option": "Annual General Meeting"
+                  },
+                  {
+                    "option": "Committee Meeting"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Meeting Date",
+              "fieldType": "date",
+              "fieldName": "meeting_date",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Start Time (IST)",
+              "fieldName": "meeting_time",
+              "placeholder": "e.g. 14:30 or 2:30 PM",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Duration (hours)",
+              "fieldType": "number",
+              "fieldName": "duration_hours",
+              "defaultValue": "2",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Venue or Video Link",
+              "fieldName": "venue",
+              "placeholder": "Boardroom, 5th floor / Google Meet link",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Directors Emails",
+              "fieldType": "textarea",
+              "fieldName": "directors_emails",
+              "placeholder": "Comma-separated email addresses",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Chairperson Email (approver)",
+              "fieldType": "email",
+              "fieldName": "chair_email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Company Secretary Email",
+              "fieldType": "email",
+              "fieldName": "secretary_email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Agenda Topics",
+              "fieldType": "textarea",
+              "fieldName": "agenda_topics",
+              "placeholder": "One topic per line",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Background Notes (optional)",
+              "fieldType": "textarea",
+              "fieldName": "background_notes",
+              "placeholder": "Context, financial highlights, previous decisions..."
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Submit for Approval",
+          "path": "board-meeting",
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Thank you. The draft meeting notice has been sent to the Chairperson for approval."
+            }
+          }
+        }
+      },
+      "id": "f0eb9310-6aa3-4dac-aa8b-ca782e2c2976",
+      "name": "Board Meeting Request Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -160,
+        112
+      ],
+      "webhookId": "748b0659-04c9-4e55-a1c8-f3429b95f2e6"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "start",
+              "name": "meeting_start",
+              "type": "string",
+              "value": "={{ (() => { const d = String($json.meeting_date).slice(0,10); const t = String($json.meeting_time).trim().toUpperCase().replace(/\\./g, ':'); const z = { zone: 'Asia/Kolkata' }; const fmts = ['HH:mm', 'H:mm', 'h:mm a', 'h:mma', 'h a', 'ha']; for (const f of fmts) { const dt = DateTime.fromFormat(d + ' ' + t, 'yyyy-MM-dd ' + f, z); if (dt.isValid) return dt.toISO(); } return DateTime.fromISO(d, z).set({ hour: 10 }).toISO(); })() }}"
+            },
+            {
+              "id": "emails",
+              "name": "directors_list",
+              "type": "string",
+              "value": "={{ String($json.directors_emails).split(/[,;\\n]+/).map(e => e.trim()).filter(e => e.includes('@')).join(', ') }}"
+            },
+            {
+              "id": "ref",
+              "name": "meeting_ref",
+              "type": "string",
+              "value": "=BM-{{ $now.toFormat('yyyyMMdd') }}-{{ $execution.id }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "ed51ef78-0765-4879-9a98-11c761d686ba",
+      "name": "Prepare Meeting Details",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "pretty",
+              "name": "meeting_when",
+              "type": "string",
+              "value": "={{ DateTime.fromISO($json.meeting_start).setZone('Asia/Kolkata').toFormat(\"cccc, d LLLL yyyy 'at' h:mm a\") }} IST"
+            },
+            {
+              "id": "rem",
+              "name": "reminder_at",
+              "type": "string",
+              "value": "={{ DateTime.max(DateTime.fromISO($json.meeting_start).minus({ hours: 24 }), $now.plus({ minutes: 5 })).toISO() }}"
+            },
+            {
+              "id": "end",
+              "name": "meeting_end",
+              "type": "string",
+              "value": "={{ DateTime.fromISO($json.meeting_start).plus({ hours: Number($json.duration_hours) || 2 }).toISO() }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "5313dc06-27eb-4e3f-ba79-7ca9897dddaf",
+      "name": "Compute Schedule",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Draft a formal notice and agenda for a board meeting.\n\nCompany: {{ $json.company_name }}\nMeeting reference: {{ $json.meeting_ref }}\nTitle: {{ $json.meeting_title }}\nType: {{ $json.meeting_type }}\nDate and time: {{ $json.meeting_when }}\nDuration: {{ $json.duration_hours }} hours\nVenue / link: {{ $json.venue }}\nAgenda topics (one per line):\n{{ $json.agenda_topics }}\nBackground notes: {{ $json.background_notes || 'None' }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an experienced Company Secretary. Write a professional, legally sound board meeting notice in clean HTML (inline styles only, no <html>/<head>/<body> tags, no markdown, no code fences). Include: a heading with company name and meeting reference; date, time, venue; a numbered agenda that always starts with standard items (Call to order and quorum check, Leave of absence, Approval of previous minutes, Declaration of conflicts of interest), followed by the provided topics each with a one-line purpose and a suggested time allocation that fits the duration, and ends with Any other business and Closing; a short \"Preparation required\" section; and a polite request to confirm attendance. Sign off as \"Company Secretary\"."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "3ffc2bf4-dd6d-4d31-9716-8b51201fa665",
+      "name": "Draft Notice and Agenda",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "efde9f46-c0fe-4bfe-af73-9a9606d33b83",
+      "name": "Notice Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $('Compute Schedule').item.json.chair_email }}",
+        "subject": "=Approval needed: {{ $('Compute Schedule').item.json.meeting_title }} notice ({{ $('Compute Schedule').item.json.meeting_ref }})",
+        "message": "=Dear Chairperson,<br><br>Please review the draft notice below for <b>{{ $('Compute Schedule').item.json.meeting_title }}</b> on {{ $('Compute Schedule').item.json.meeting_when }}. Once approved it will be sent to: {{ $('Compute Schedule').item.json.directors_list }}.<br><hr>{{ $json.text.replace(/```html|```/g, '') }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve and Send",
+            "disapproveLabel": "Reject"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 2,
+              "resumeUnit": "days"
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "be64cae1-1458-4c0c-b666-a5e5c7833e41",
+      "name": "Request Chair Approval",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        224
+      ],
+      "webhookId": "cd1ea06e-9217-47d2-8417-6e665ae1895d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Fv8X6PHMWv0uV6X",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data?.approved === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f555f670-5819-4a03-b8c0-42445788578a",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1296,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Compute Schedule').item.json.directors_list }}",
+        "subject": "=Notice of {{ $('Compute Schedule').item.json.meeting_type }}: {{ $('Compute Schedule').item.json.meeting_title }} on {{ $('Compute Schedule').item.json.meeting_when }}",
+        "message": "={{ $('Draft Notice and Agenda').item.json.text.replace(/```html|```/g, '') }}",
+        "options": {
+          "appendAttribution": false,
+          "ccList": "={{ $('Compute Schedule').item.json.chair_email }}, {{ $('Compute Schedule').item.json.secretary_email }}",
+          "senderName": "Company Secretary",
+          "replyTo": "={{ $('Compute Schedule').item.json.secretary_email }}"
+        }
+      },
+      "id": "0fb0e998-e627-4193-93a9-f5e554a395cd",
+      "name": "Send Notice to Directors",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        224
+      ],
+      "webhookId": "9ab674cf-304d-4dd2-b9a9-15394b685950",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Fv8X6PHMWv0uV6X",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Compute Schedule').item.json.reminder_at }}"
+      },
+      "id": "42d4ae5b-9bab-4c3f-8e13-6d368fbd1672",
+      "name": "Wait Until 24h Before",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1824,
+        224
+      ],
+      "webhookId": "c36084b7-44bc-43e3-97d8-0e5d23388f56"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Compute Schedule').item.json.directors_list }}",
+        "subject": "=Reminder: {{ $('Compute Schedule').item.json.meeting_title }} - {{ $('Compute Schedule').item.json.meeting_when }}",
+        "message": "=Dear Directors,<br><br>This is a reminder that the <b>{{ $('Compute Schedule').item.json.meeting_title }}</b> of {{ $('Compute Schedule').item.json.company_name }} will be held on <b>{{ $('Compute Schedule').item.json.meeting_when }}</b>.<br><br><b>Venue / link:</b> {{ $('Compute Schedule').item.json.venue }}<br><b>Reference:</b> {{ $('Compute Schedule').item.json.meeting_ref }}<br><br>Please review the agenda circulated earlier and inform the Company Secretary if you are unable to attend.<br><br>Regards,<br>Company Secretary",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Company Secretary",
+          "replyTo": "={{ $('Compute Schedule').item.json.secretary_email }}"
+        }
+      },
+      "id": "c14abdc9-8c24-4fe9-b365-15a8143dcd23",
+      "name": "Send Reminder to Directors",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2048,
+        224
+      ],
+      "webhookId": "8baf1107-5a36-4566-a696-90ee34d0c70b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Fv8X6PHMWv0uV6X",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Compute Schedule').item.json.meeting_end }}"
+      },
+      "id": "0f7a25ac-3337-4546-b7d3-1f226417f1d7",
+      "name": "Wait Until Meeting Ends",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2080,
+        112
+      ],
+      "webhookId": "e44234b0-8427-4300-90a2-05c6193a622b"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $('Compute Schedule').item.json.secretary_email }}",
+        "subject": "=Submit notes for minutes: {{ $('Compute Schedule').item.json.meeting_title }} ({{ $('Compute Schedule').item.json.meeting_ref }})",
+        "message": "=The <b>{{ $('Compute Schedule').item.json.meeting_title }}</b> has ended. Please submit the attendance, discussion notes and decisions. Formal minutes and an action-item tracker will be generated and circulated to the board automatically.",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Directors Present",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Apologies / Absent",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "Discussion Notes",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Resolutions and Decisions",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Action Items (task - owner - due date)",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eef5f223-b3c0-4001-a3be-4ff39122e718",
+      "name": "Collect Meeting Notes",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2304,
+        112
+      ],
+      "webhookId": "d714592e-32e6-443a-8b8f-6827b7eb9294",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Fv8X6PHMWv0uV6X",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Prepare formal minutes for this board meeting.\n\nCompany: {{ $('Compute Schedule').item.json.company_name }}\nReference: {{ $('Compute Schedule').item.json.meeting_ref }}\nTitle: {{ $('Compute Schedule').item.json.meeting_title }} ({{ $('Compute Schedule').item.json.meeting_type }})\nHeld on: {{ $('Compute Schedule').item.json.meeting_when }}\nVenue: {{ $('Compute Schedule').item.json.venue }}\nPlanned agenda:\n{{ $('Compute Schedule').item.json.agenda_topics }}\n\nSecretary's submitted notes (JSON):\n{{ JSON.stringify($json.data || $json) }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an experienced Company Secretary. Produce formal board minutes in clean HTML (inline styles only, no <html>/<head>/<body>, no markdown, no code fences). Sections: header (company, reference, date, venue); Attendance (present, apologies, quorum statement); numbered Minutes per agenda item summarising discussion; Resolutions passed, each phrased \"RESOLVED THAT ...\"; an Action Items HTML table with columns #, Action, Owner, Due Date, Status (Open) - infer owners and dates only from the notes, otherwise write \"TBD\"; Next steps; and a signature block for Chairperson and Company Secretary marked \"Draft - subject to approval at the next meeting\". Do not invent facts not present in the notes."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "b09926dd-25a9-4424-8516-fe8e5ca26419",
+      "name": "Draft Minutes and Actions",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2528,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "db186f45-d56d-49e5-86ce-0521e3cf65ad",
+      "name": "Minutes Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2608,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Compute Schedule').item.json.directors_list }}",
+        "subject": "=Draft Minutes: {{ $('Compute Schedule').item.json.meeting_title }} ({{ $('Compute Schedule').item.json.meeting_ref }})",
+        "message": "=Dear Directors,<br><br>Please find below the draft minutes and action items. Kindly send any corrections to the Company Secretary within 7 days.<br><hr>{{ $json.text.replace(/```html|```/g, '') }}",
+        "options": {
+          "appendAttribution": false,
+          "ccList": "={{ $('Compute Schedule').item.json.chair_email }}, {{ $('Compute Schedule').item.json.secretary_email }}",
+          "senderName": "Company Secretary",
+          "replyTo": "={{ $('Compute Schedule').item.json.secretary_email }}"
+        }
+      },
+      "id": "2cc4275f-532b-4d1a-b41d-3c31f88b1f95",
+      "name": "Circulate Draft Minutes",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2880,
+        112
+      ],
+      "webhookId": "34292b26-be81-4713-bbaa-131ecfee62b0",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Fv8X6PHMWv0uV6X",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Compute Schedule').item.json.secretary_email }}",
+        "subject": "=Not approved: {{ $('Compute Schedule').item.json.meeting_title }} ({{ $('Compute Schedule').item.json.meeting_ref }})",
+        "message": "=The Chairperson rejected (or did not respond within 2 days to) the draft notice for <b>{{ $('Compute Schedule').item.json.meeting_title }}</b> scheduled on {{ $('Compute Schedule').item.json.meeting_when }}. No notice was sent to the directors. Please revise and resubmit the form.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "75919101-7e57-409f-84b3-45df18b2db1e",
+      "name": "Notify Secretary of Rejection",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        224
+      ],
+      "webhookId": "0ccd691f-3fed-4571-88a0-c213719c17a5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9Fv8X6PHMWv0uV6X",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Board Meeting Request Form": {
+      "main": [
+        [
+          {
+            "node": "Prepare Meeting Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Meeting Details": {
+      "main": [
+        [
+          {
+            "node": "Compute Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Schedule": {
+      "main": [
+        [
+          {
+            "node": "Draft Notice and Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Notice and Agenda": {
+      "main": [
+        [
+          {
+            "node": "Request Chair Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notice Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Draft Notice and Agenda",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Chair Approval": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Send Notice to Directors",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Secretary of Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Notice to Directors": {
+      "main": [
+        [
+          {
+            "node": "Wait Until 24h Before",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Until 24h Before": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder to Directors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder to Directors": {
+      "main": [
+        [
+          {
+            "node": "Wait Until Meeting Ends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Until Meeting Ends": {
+      "main": [
+        [
+          {
+            "node": "Collect Meeting Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Meeting Notes": {
+      "main": [
+        [
+          {
+            "node": "Draft Minutes and Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Minutes and Actions": {
+      "main": [
+        [
+          {
+            "node": "Circulate Draft Minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Minutes Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Draft Minutes and Actions",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e5461521-6fb1-4968-8805-a9282120d0c1",
+  "meta": {
+    "instanceId": "a8a27f3f18c9d91d5ea2f0f109f0832f61832d79ce28cbbf948ea3c9727e24f9"
+  },
+  "nodeGroups": [
+    {
+      "id": "73274ad7-27da-42c5-8092-d16e52933846",
+      "name": "Draft meeting notice",
+      "nodeIds": [
+        "ed51ef78-0765-4879-9a98-11c761d686ba",
+        "5313dc06-27eb-4e3f-ba79-7ca9897dddaf",
+        "3ffc2bf4-dd6d-4d31-9716-8b51201fa665",
+        "efde9f46-c0fe-4bfe-af73-9a9606d33b83"
+      ],
+      "description": "Parses the request, works out reminder and end times in IST, and has AI write a formal notice with a timed agenda"
+    },
+    {
+      "id": "44fc9990-9ab7-461e-adf0-79a0ff47a61f",
+      "name": "Get chair sign-off",
+      "nodeIds": [
+        "be64cae1-1458-4c0c-b666-a5e5c7833e41",
+        "f555f670-5819-4a03-b8c0-42445788578a"
+      ],
+      "description": "Emails the draft to the Chairperson with Approve/Reject buttons and waits up to 2 days for a decision"
+    },
+    {
+      "id": "531c9bf0-0457-4279-a091-48325592e5fb",
+      "name": "Notify and remind board",
+      "nodeIds": [
+        "0fb0e998-e627-4193-93a9-f5e554a395cd",
+        "42d4ae5b-9bab-4c3f-8e13-6d368fbd1672",
+        "c14abdc9-8c24-4fe9-b365-15a8143dcd23"
+      ],
+      "description": "Sends the approved notice to all directors, then a reminder 24 hours before the meeting starts"
+    },
+    {
+      "id": "a0fc83ea-907a-4aad-9950-a3b0a073f386",
+      "name": "Produce meeting minutes",
+      "nodeIds": [
+        "0f7a25ac-3337-4546-b7d3-1f226417f1d7",
+        "eef5f223-b3c0-4001-a3be-4ff39122e718",
+        "b09926dd-25a9-4424-8516-fe8e5ca26419",
+        "db186f45-d56d-49e5-86ce-0521e3cf65ad",
+        "2cc4275f-532b-4d1a-b41d-3c31f88b1f95"
+      ],
+      "description": "After the meeting, asks the Secretary for notes, then AI drafts minutes, resolutions and an action tracker for the board"
+    }
+  ],
+  "id": "zU9k5YCwVY7ypZHJ",
+  "tags": []
+}
